@@ -1,0 +1,30 @@
+===== QUIZ AUTOMATION STARTED =====
+Loaded Quiz Page
+Page Title: Dynamic Quiz App — Black / Grey / White Theme
+Page URL: file:///C://Users//SAIKIRAN//Downloads//Frugal_Testing_QuizApp-main//Frugal_Testing_QuizApp-main//quiz.html
+Landing page verified successfully.
+Selected category: Python
+Quiz Started — Question 1 displayed
+Quiz start verified: First question displayed.
+Answering Question 1
+Question 1 text: What does try-except do?
+Question 1 has 4 options.
+Answering Question 2
+Question 2 text: What does range() do?
+Question 2 has 4 options.
+Answering Question 3
+Question 3 text: Which loop is for iteration?
+Question 3 has 4 options.
+Answering Question 4
+Question 4 text: What is list comprehension?
+Question 4 has 4 options.
+Answering Question 5
+Question 5 text: What is a dictionary in Python?
+Question 5 has 4 options.
+Quiz Submitted. Results displayed.
+Results page verified.
+Score shown: 2 / 5
+Correct answers: 2
+Wrong answers: 3
+Score verification passed.
+===== QUIZ AUTOMATION COMPLETED SUCCESSFULLY =====

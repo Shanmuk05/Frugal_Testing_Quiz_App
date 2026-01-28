@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Dynamic Quiz App — Black / Grey / White Theme</title>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <style>
+        :root{
+          /* Strict black / gray / white palette */
+          --bg:#0b0b0b;          /* near black page background */
+          --card:#2b2f36;        /* dark card (charcoal) */
+          --panel:#1c1e23;       /* even darker panels */
+          --accent:#e5e7eb;      /* very light gray / near-white accent */
+          --muted:#9ca3af;       /* medium gray text */
+          --success:#d1fae5;     /* soft pale (used only as subtle highlight) */
+          --danger:#fee2e2;      /* soft pale red (used sparingly) */
+          --radius:12px;
+          font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+        }
+        *{box-sizing:border-box}
+        html,body{height:100%}
+        body{
+          margin:0;background:linear-gradient(180deg,var(--bg),#09090b 160px);
+          min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:28px;
+          color:var(--accent);
+        }
+
+        .container{width:100%;max-width:980px;background:transparent}
+
+        .card{
+          background:var(--card);border-radius:var(--radius);box-shadow:0 8px 30px rgba(0,0,0,0.6);
+          padding:20px;margin-bottom:18px;border:1px solid rgba(255,255,255,0.03)
+        }
+
+        header .title{display:flex;align-items:center;gap:12px}
+        header h1{margin:0;font-size:20px;color:var(--accent)}
+        header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+
+        /* selection area - using option buttons instead of <select> */
+        .controls{display:flex;flex-direction:column;gap:18px;margin-top:16px}
+
+        .option-group{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+        .group-label{font-size:13px;color:var(--muted);margin-right:8px}
+
+        .option-btn{
+          padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);
+          background:transparent;color:var(--accent);cursor:pointer;font-size:14px;display:flex;gap:8px;align-items:center
+        }
+        .option-btn:hover{border-color:rgba(229,231,235,0.06)}
+        .option-btn.selected{background:linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));border-color:rgba(255,255,255,0.08);box-shadow:0 6px 18px rgba(0,0,0,0.6)}
+
+        button.primary{background:transparent;border:1px solid var(--accent);color:var(--accent);padding:10px 14px;border-radius:10px;cursor:pointer}
+        button.primary:hover{background:rgba(229,231,235,0.03)}
+
+        /* quiz area */
+        .quiz-area{display:none}
+        .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+        .timer{display:flex;gap:8px;align-items:center;font-weight:600;color:var(--accent);background:transparent;padding:6px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.03)}
+        .question{font-size:18px;margin-bottom:14px;color:var(--accent)}
+        .choices{display:grid;gap:10px}
+        .choice{padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;cursor:pointer}
+        .choice.selected{border-color:var(--accent);box-shadow:0 6px 18px rgba(0,0,0,0.6);background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01))}
+        .nav{display:flex;justify-content:space-between;gap:12px;margin-top:16px}
+        .progress{font-size:13px;color:var(--muted)}
+
+        /* results */
+        .results{display:none}
+        .stats{display:flex;flex-wrap:wrap;gap:12px}
+        .stat-card{flex:1;min-width:160px;padding:12px;border-radius:10px;background:var(--panel);border:1px solid rgba(255,255,255,0.02)}
+        .small{font-size:13px;color:var(--muted)}
+        table{width:100%;border-collapse:collapse;margin-top:12px}
+        th,td{padding:8px;border-bottom:1px solid rgba(255,255,255,0.03);text-align:left;font-size:14px;color:var(--accent)}
+        .correct{color:var(--accent);font-weight:600}
+        .wrong{color:var(--muted);font-weight:600}
+
+        /* responsive */
+        @media (max-width:700px){
+          body{padding:14px}
+          .question{font-size:16px}
+          .controls{flex-direction:column;align-items:stretch}
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="card" id="setupCard">
+        <div class="title">
+            <div>
+                <h1>Dynamic Quiz — Monochrome</h1>
+                <p>Select category & difficulty using the option buttons below. Quiz will always contain 5 questions.</p>
+            </div>
+        </div>
+
+        <div class="controls" style="margin-top:16px">
+            <div class="option-group" aria-label="Category choices">
+                <div class="group-label">Category</div>
+                <button class="option-btn" data-category="c">💻 C</button>
+                <button class="option-btn" data-category="python">� Python</button>
+                <button class="option-btn" data-category="java">☕ Java</button>
+            </div>
+
+            <div class="option-group" aria-label="Difficulty choices">
+                <div class="group-label">Difficulty</div>
+                <button class="option-btn" data-difficulty="easy">🟢 Easy</button>
+                <button class="option-btn selected" data-difficulty="medium">🟡 Medium</button>
+                <button class="option-btn" data-difficulty="hard">🔴 Hard</button>
+            </div>
+
+            <div>
+                <button id="startBtn" class="primary">Start Test (5 Qs)</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card quiz-area" id="quizCard" aria-live="polite">
+        <div class="topbar">
+            <div class="progress"><span id="progressText">Question 1 / 5</span></div>
+            <div class="timer" aria-hidden="false"><span id="timerLabel">00:20</span></div>
+        </div>
+
+        <div>
+            <div class="question" id="questionText">Question text</div>
+            <div class="choices" id="choices"></div>
+
+            <div class="nav">
+                <div style="display:flex;gap:8px">
+                    <button class="option-btn" id="prevBtn">◀ Previous</button>
+                    <button class="option-btn" id="nextBtn">Next ▶</button>
+                </div>
+
+                <div style="display:flex;align-items:center;gap:8px">
+                    <div class="small">Auto-submit when timer hits zero</div>
+                    <button class="option-btn" id="submitBtn">Submit Quiz</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card results" id="resultsCard">
+        <h2 style="color:var(--accent)">Results</h2>
+
+        <div class="stats" style="margin-top:10px">
+            <div class="stat-card">
+                <div class="small">Score</div>
+                <div style="font-size:20px;font-weight:700" id="scoreText">0 / 0</div>
+                <div class="small" id="percentText">0%</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="small">Correct</div>
+                <div style="font-size:20px;font-weight:700" id="correctCount">0</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="small">Incorrect</div>
+                <div style="font-size:20px;font-weight:700" id="wrongCount">0</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="small">Average time / Q</div>
+                <div style="font-size:20px;font-weight:700" id="avgTime">0s</div>
+            </div>
+        </div>
+
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:18px">
+            <div style="flex:1;min-width:260px" class="card">
+                <canvas id="pieChart" height="200"></canvas>
+            </div>
+
+            <div style="flex:2;min-width:320px" class="card">
+                <canvas id="barChart" height="200"></canvas>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+            <h3 style="color:var(--accent)">Question Breakdown</h3>
+            <table id="breakdownTable">
+                <thead><tr><th>#</th><th>Question</th><th>Your Answer</th><th>Correct Answer</th><th>Time (s)</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:8px">
+            <button id="restartBtn" class="option-btn">Take another quiz</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    /***********************
+     * New question set (changed as requested)
+     ***********************/
+  const QUESTION_POOL = [
+    // -------------------- C (30 QUESTIONS) --------------------
+    // EASY (10)
+    {id:1, category:'c', difficulty:'easy', question:'What is the file extension for C programs?', options:['.cpp','.c','.java','.py'], answer:1},
+    {id:2, category:'c', difficulty:'easy', question:'Which function is used to print output in C?', options:['cout','print','printf','echo'], answer:2},
+    {id:3, category:'c', difficulty:'easy', question:'What does #include do?', options:['Defines a function','Includes header files','Declares variables','Ends the program'], answer:1},
+    {id:4, category:'c', difficulty:'easy', question:'What is the entry point of a C program?', options:['void main()','int main()','start()','run()'], answer:1},
+    {id:5, category:'c', difficulty:'easy', question:'Which operator is used for assignment in C?', options:['==','=','===','!='], answer:1},
+    {id:6, category:'c', difficulty:'easy', question:'What is the size of int in C?', options:['1 byte','2 bytes','4 bytes','8 bytes'], answer:2},
+    {id:7, category:'c', difficulty:'easy', question:'Which header file is needed for printf?', options:['<math.h>','<stdio.h>','<string.h>','<stdlib.h>'], answer:1},
+    {id:8, category:'c', difficulty:'easy', question:'What does return 0; do?', options:['Exits the program with error','Exits the program successfully','Pauses the program','Restarts the program'], answer:1},
+    {id:9, category:'c', difficulty:'easy', question:'Which symbol starts a comment in C?', options:['//','#','/*','--'], answer:0},
+    {id:10, category:'c', difficulty:'easy', question:'What is a variable in C?', options:['A constant value','A named storage location','A function','A loop'], answer:1},
+
+    // MEDIUM (10)
+    {id:11, category:'c', difficulty:'medium', question:'What is a pointer in C?', options:['A data type','A variable that stores memory address','A function','An array'], answer:1},
+    {id:12, category:'c', difficulty:'medium', question:'Which loop executes at least once?', options:['for','while','do-while','if'], answer:2},
+    {id:13, category:'c', difficulty:'medium', question:'What does malloc() do?', options:['Frees memory','Allocates memory','Copies memory','Moves memory'], answer:1},
+    {id:14, category:'c', difficulty:'medium', question:'What is the use of scanf?', options:['Print output','Read input','Calculate sum','Compare strings'], answer:1},
+    {id:15, category:'c', difficulty:'medium', question:'Which data type is used for characters?', options:['int','float','char','double'], answer:2},
+    {id:16, category:'c', difficulty:'medium', question:'What is an array in C?', options:['A single variable','A collection of similar elements','A function','A pointer'], answer:1},
+    {id:17, category:'c', difficulty:'medium', question:'What does break do in a loop?', options:['Continues the loop','Exits the loop','Restarts the loop','Skips iteration'], answer:1},
+    {id:18, category:'c', difficulty:'medium', question:'Which operator is used for logical AND?', options:['&','&&','|','||'], answer:1},
+    {id:19, category:'c', difficulty:'medium', question:'What is a struct in C?', options:['A function','A user-defined data type','An array','A pointer'], answer:1},
+    {id:20, category:'c', difficulty:'medium', question:'What does strlen() do?', options:['Copies string','Compares strings','Returns string length','Converts string'], answer:2},
+
+    // HARD (10)
+    {id:21, category:'c', difficulty:'hard', question:'What is the difference between ++i and i++?', options:['No difference','++i increments before use, i++ after','++i decrements','i++ increments before'], answer:1},
+    {id:22, category:'c', difficulty:'hard', question:'What is a dangling pointer?', options:['Pointer to allocated memory','Pointer to freed memory','Null pointer','Void pointer'], answer:1},
+    {id:23, category:'c', difficulty:'hard', question:'Which function is used for dynamic memory allocation?', options:['malloc','printf','scanf','strcpy'], answer:0},
+    {id:24, category:'c', difficulty:'hard', question:'What is the purpose of volatile keyword?', options:['Makes variable constant','Prevents optimization','Makes variable global','Defines function'], answer:1},
+    {id:25, category:'c', difficulty:'hard', question:'What is a segmentation fault?', options:['Syntax error','Runtime error due to invalid memory access','Logical error','Compilation error'], answer:1},
+    {id:26, category:'c', difficulty:'hard', question:'What does sizeof operator return?', options:['Value of variable','Address of variable','Size in bytes','Type of variable'], answer:2},
+    {id:27, category:'c', difficulty:'hard', question:'What is a union in C?', options:['Same as struct','Shares memory','A function','An array'], answer:1},
+    {id:28, category:'c', difficulty:'hard', question:'What is recursion?', options:['Looping','Function calling itself','Array traversal','Pointer arithmetic'], answer:1},
+    {id:29, category:'c', difficulty:'hard', question:'What is the use of typedef?', options:['Defines new data type','Declares variable','Includes file','Ends program'], answer:0},
+    {id:30, category:'c', difficulty:'hard', question:'What is endianness?', options:['Byte order in memory','Variable scope','Function return type','Loop type'], answer:0},
+
+    // -------------------- PYTHON (30 QUESTIONS) --------------------
+    // EASY (10)
+    {id:31, category:'python', difficulty:'easy', question:'What is the file extension for Python?', options:['.py','.java','.c','.cpp'], answer:0},
+    {id:32, category:'python', difficulty:'easy', question:'Which function prints in Python?', options:['echo','print','printf','cout'], answer:1},
+    {id:33, category:'python', difficulty:'easy', question:'How to define a function in Python?', options:['func','def','function','define'], answer:1},
+    {id:34, category:'python', difficulty:'easy', question:'What is used for comments in Python?', options:['//','#','/*','--'], answer:1},
+    {id:35, category:'python', difficulty:'easy', question:'Which data type is mutable?', options:['tuple','list','string','int'], answer:1},
+    {id:36, category:'python', difficulty:'easy', question:'What does len() do?', options:['Returns length','Sums elements','Finds max','Reverses'], answer:0},
+    {id:37, category:'python', difficulty:'easy', question:'How to create a list in Python?', options:['[]','{}','()','<>'], answer:0},
+    {id:38, category:'python', difficulty:'easy', question:'What is indentation in Python?', options:['Optional','Required for blocks','For comments','For strings'], answer:1},
+    {id:39, category:'python', difficulty:'easy', question:'Which operator is used for equality?', options:['=','==','===','!=='], answer:1},
+    {id:40, category:'python', difficulty:'easy', question:'What does if do?', options:['Loops','Conditional','Function','Variable'], answer:1},
+
+    // MEDIUM (10)
+    {id:41, category:'python', difficulty:'medium', question:'What is a dictionary in Python?', options:['List','Tuple','Key-value pairs','Set'], answer:2},
+    {id:42, category:'python', difficulty:'medium', question:'Which method adds to list?', options:['add','append','insert','push'], answer:1},
+    {id:43, category:'python', difficulty:'medium', question:'What is slicing in Python?', options:['Cutting strings','Extracting parts','Sorting','Reversing'], answer:1},
+    {id:44, category:'python', difficulty:'medium', question:'What does import do?', options:['Exports','Includes module','Defines function','Creates class'], answer:1},
+    {id:45, category:'python', difficulty:'medium', question:'Which loop is for iteration?', options:['if','while','for','switch'], answer:2},
+    {id:46, category:'python', difficulty:'medium', question:'What is a lambda function?', options:['Named function','Anonymous function','Class method','Builtin'], answer:1},
+    {id:47, category:'python', difficulty:'medium', question:'What does try-except do?', options:['Loops','Handles errors','Defines class','Imports'], answer:1},
+    {id:48, category:'python', difficulty:'medium', question:'Which type is immutable?', options:['list','dict','tuple','set'], answer:2},
+    {id:49, category:'python', difficulty:'medium', question:'What is list comprehension?', options:['Loop syntax','Conditional','Class definition','Function call'], answer:0},
+    {id:50, category:'python', difficulty:'medium', question:'What does range() do?', options:['Creates list','Generates numbers','Finds range','Sums'], answer:1},
+
+    // HARD (10)
+    {id:51, category:'python', difficulty:'hard', question:'What is GIL in Python?', options:['Graphic Interface Library','Global Interpreter Lock','General Input Library','Graphics Image Loader'], answer:1},
+    {id:52, category:'python', difficulty:'hard', question:'What is __init__?', options:['Destructor','Constructor','Method','Variable'], answer:1},
+    {id:53, category:'python', difficulty:'hard', question:'What is a decorator?', options:['Class','Function that modifies another','Variable','Loop'], answer:1},
+    {id:54, category:'python', difficulty:'hard', question:'What does *args do?', options:['Unpacks list','Keyword arguments','Positional arguments','Named arguments'], answer:2},
+    {id:55, category:'python', difficulty:'hard', question:'What is multithreading in Python?', options:['Multiple processes','Concurrent threads','Sequential','Single thread'], answer:1},
+    {id:56, category:'python', difficulty:'hard', question:'What is a generator?', options:['Function that returns iterator','Class','List','Tuple'], answer:0},
+    {id:57, category:'python', difficulty:'hard', question:'What does super() do?', options:['Calls parent method','Creates instance','Defines class','Imports'], answer:0},
+    {id:58, category:'python', difficulty:'hard', question:'What is metaclasses?', options:['Class of classes','Instance','Method','Function'], answer:0},
+    {id:59, category:'python', difficulty:'hard', question:'What is context manager?', options:['Manages resources','Manages threads','Manages memory','Manages files'], answer:0},
+    {id:60, category:'python', difficulty:'hard', question:'What is asyncio?', options:['Async programming','Sync programming','GUI library','Web framework'], answer:0},
+
+    // -------------------- JAVA (30 QUESTIONS) --------------------
+    // EASY (10)
+    {id:61, category:'java', difficulty:'easy', question:'What is the file extension for Java?', options:['.py','.c','.java','.cpp'], answer:2},
+    {id:62, category:'java', difficulty:'easy', question:'Which method prints in Java?', options:['print','printf','System.out.println','cout'], answer:2},
+    {id:63, category:'java', difficulty:'easy', question:'What is the main method signature?', options:['public static void main','public void main','static void main','void main'], answer:0},
+    {id:64, category:'java', difficulty:'easy', question:'What does JVM stand for?', options:['Java Virtual Machine','Java Variable Method','Just Virtual Memory','Java Version Manager'], answer:0},
+    {id:65, category:'java', difficulty:'easy', question:'Which keyword creates object?', options:['class','new','object','create'], answer:1},
+    {id:66, category:'java', difficulty:'easy', question:'What is a class in Java?', options:['Variable','Method','Blueprint for objects','Loop'], answer:2},
+    {id:67, category:'java', difficulty:'easy', question:'What does public mean?', options:['Private','Accessible everywhere','Protected','Package'], answer:1},
+    {id:68, category:'java', difficulty:'easy', question:'Which data type for whole numbers?', options:['float','double','int','char'], answer:2},
+    {id:69, category:'java', difficulty:'easy', question:'What does // do?', options:['Multi-line comment','Single-line comment','String','Variable'], answer:1},
+    {id:70, category:'java', difficulty:'easy', question:'What is inheritance?', options:['Copying code','Class extending another','Method calling','Variable sharing'], answer:1},
+
+    // MEDIUM (10)
+    {id:71, category:'java', difficulty:'medium', question:'What is polymorphism?', options:['Multiple forms','Single form','Class definition','Method'], answer:0},
+    {id:72, category:'java', difficulty:'medium', question:'Which interface for collections?', options:['List','Set','Map','All'], answer:3},
+    {id:73, category:'java', difficulty:'medium', question:'What does ArrayList do?', options:['Fixed size','Dynamic size','Sorted','Unique'], answer:1},
+    {id:74, category:'java', difficulty:'medium', question:'What is exception handling?', options:['Error management','Loop control','Class creation','Method definition'], answer:0},
+    {id:75, category:'java', difficulty:'medium', question:'Which keyword for inheritance?', options:['implements','extends','inherit','super'], answer:1},
+    {id:76, category:'java', difficulty:'medium', question:'What is a constructor?', options:['Destroys object','Initializes object','Copies object','Compares object'], answer:1},
+    {id:77, category:'java', difficulty:'medium', question:'What does static mean?', options:['Instance variable','Class level','Method level','Local'], answer:1},
+    {id:78, category:'java', difficulty:'medium', question:'What is String in Java?', options:['Primitive','Object','Array','Class'], answer:1},
+    {id:79, category:'java', difficulty:'medium', question:'Which loop is entry-controlled?', options:['do-while','while','for','all'], answer:1},
+    {id:80, category:'java', difficulty:'medium', question:'What is JDBC?', options:['Database connectivity','GUI','Networking','Files'], answer:0},
+
+    // HARD (10)
+    {id:81, category:'java', difficulty:'hard', question:'What is serialization?', options:['Object to byte stream','Byte to object','Copy object','Delete object'], answer:0},
+    {id:82, category:'java', difficulty:'hard', question:'What is JVM memory areas?', options:['Heap, Stack, PC','Only Heap','Only Stack','Heap and PC'], answer:0},
+    {id:83, category:'java', difficulty:'hard', question:'What is garbage collection?', options:['Manual memory','Automatic cleanup','File handling','Threading'], answer:1},
+    {id:84, category:'java', difficulty:'hard', question:'What is synchronization?', options:['Thread safety','Speed','Memory','I/O'], answer:0},
+    {id:85, category:'java', difficulty:'hard', question:'What is reflection?', options:['Inspect classes','Create objects','Compile code','Run code'], answer:0},
+    {id:86, category:'java', difficulty:'hard', question:'What is lambda expression?', options:['Anonymous function','Named function','Class','Interface'], answer:0},
+    {id:87, category:'java', difficulty:'hard', question:'What is stream API?', options:['Data processing','File I/O','Networking','GUI'], answer:0},
+    {id:88, category:'java', difficulty:'hard', question:'What is volatile keyword?', options:['Thread visibility','Constant','Static','Final'], answer:0},
+    {id:89, category:'java', difficulty:'hard', question:'What is Java generics?', options:['Type safety','Dynamic typing','Reflection','Serialization'], answer:0},
+    {id:90, category:'java', difficulty:'hard', question:'What is JIT compiler?', options:['Just In Time compilation','Java Interpreter Tool','Just In Time Code','Java Instant Tool'], answer:0}
+  ];
+
+    // App state
+    let state = {
+      selectedQuestions: [],
+      currentIndex: 0,
+      perQuestionTimeLimit: 20,
+      timerId: null,
+      timeLeft: 0,
+      quizStarted: false,
+      startedAt: null,
+      finishedAt: null
+    };
+
+    // DOM nodes
+    const startBtn = document.getElementById('startBtn');
+    const setupCard = document.getElementById('setupCard');
+    const quizCard = document.getElementById('quizCard');
+    const resultsCard = document.getElementById('resultsCard');
+
+    const progressText = document.getElementById('progressText');
+    const timerLabel = document.getElementById('timerLabel');
+    const questionText = document.getElementById('questionText');
+    const choicesDiv = document.getElementById('choices');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const submitBtn = document.getElementById('submitBtn');
+
+    const scoreText = document.getElementById('scoreText');
+    const percentText = document.getElementById('percentText');
+    const correctCountEl = document.getElementById('correctCount');
+    const wrongCountEl = document.getElementById('wrongCount');
+    const avgTimeEl = document.getElementById('avgTime');
+    const breakdownTableBody = document.querySelector('#breakdownTable tbody');
+
+    const restartBtn = document.getElementById('restartBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+
+    // option buttons
+    const categoryButtons = Array.from(document.querySelectorAll('[data-category]'));
+    const difficultyButtons = Array.from(document.querySelectorAll('[data-difficulty]'));
+
+    // Charts
+    let pieChart = null;
+    let barChart = null;
+
+    // Utilities
+    function shuffle(arr){
+      for(let i=arr.length-1;i>0;i--){
+        const j = Math.floor(Math.random()*(i+1));
+        [arr[i],arr[j]]=[arr[j],arr[i]];
+      }
+      return arr;
+    }
+
+    function buildQuestionSet(category, difficulty, count){
+      let pool = QUESTION_POOL.filter(q => (q.category === category) && (q.difficulty === difficulty));
+      if(pool.length < count){
+        const fallback = QUESTION_POOL.filter(q => q.category === category && q.difficulty !== difficulty);
+        pool = pool.concat(fallback);
+      }
+      if(pool.length < count) pool = pool.concat(QUESTION_POOL);
+      pool = shuffle(pool.slice());
+      const chosen = pool.slice(0, Math.min(count, pool.length));
+      return chosen.map(q => ({ qobj: q, chosenIndex: null, timeSpent: 0 }));
+    }
+
+    function formatTime(sec){
+      const s = Math.floor(sec % 60).toString().padStart(2,'0');
+      const m = Math.floor(sec / 60).toString().padStart(2,'0');
+      return m+':'+s;
+    }
+
+    // option buttons behavior
+    function markSelected(buttons, attrName, value){
+      buttons.forEach(b => b.classList.toggle('selected', b.getAttribute(attrName) === value));
+    }
+
+    // initialize default selections
+    let selectedCategory = 'c';
+    let selectedDifficulty = 'medium';
+    markSelected(categoryButtons, 'data-category', selectedCategory);
+    markSelected(difficultyButtons, 'data-difficulty', selectedDifficulty);
+
+    categoryButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedCategory = btn.getAttribute('data-category');
+        markSelected(categoryButtons, 'data-category', selectedCategory);
+      });
+    });
+    difficultyButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedDifficulty = btn.getAttribute('data-difficulty');
+        markSelected(difficultyButtons, 'data-difficulty', selectedDifficulty);
+      });
+    });
+
+    // Start quiz (fixed 5 questions)
+    startBtn.addEventListener('click', () => {
+      const qcount = 5;
+      // time per difficulty
+      let seconds = 25;
+      if (selectedDifficulty === 'easy') seconds = 20;
+      if (selectedDifficulty === 'medium') seconds = 25;
+      if (selectedDifficulty === 'hard') seconds = 30;
+
+      state.selectedQuestions = buildQuestionSet(selectedCategory, selectedDifficulty, qcount);
+      state.currentIndex = 0;
+      state.perQuestionTimeLimit = seconds;
+      state.quizStarted = true;
+      state.startedAt = Date.now();
+
+      setupCard.style.display = 'none';
+      resultsCard.style.display = 'none';
+      quizCard.style.display = 'block';
+
+      renderCurrentQuestion();
+      startTimerForCurrent();
+    });
+
+    function renderCurrentQuestion(){
+      const idx = state.currentIndex;
+      const total = state.selectedQuestions.length;
+      progressText.textContent = `Question ${idx+1} / ${total}`;
+
+      const item = state.selectedQuestions[idx];
+      questionText.textContent = item.qobj.question;
+
+      choicesDiv.innerHTML = '';
+      item.qobj.options.forEach((opt, i) => {
+        const btn = document.createElement('div');
+        btn.className = 'choice';
+        btn.setAttribute('role','button');
+        btn.setAttribute('tabindex',0);
+        btn.dataset.index = i;
+        btn.innerHTML = `<div>${String.fromCharCode(65+i)}. ${opt}</div>`;
+        if(item.chosenIndex === i) btn.classList.add('selected');
+
+        btn.addEventListener('click', () => { onChooseOption(i); });
+        btn.addEventListener('keydown', (e) => { if(e.key === 'Enter' || e.key === ' ') onChooseOption(i); });
+
+        choicesDiv.appendChild(btn);
+      });
+
+      // Hide/show navigation buttons
+      prevBtn.style.display = idx === 0 ? 'none' : 'inline-block';
+      nextBtn.style.display = idx === total - 1 ? 'none' : 'inline-block';
+
+      timerLabel.textContent = formatTime(state.timeLeft || state.perQuestionTimeLimit);
+    }
+
+    function onChooseOption(choiceIdx){
+      const idx = state.currentIndex;
+      const item = state.selectedQuestions[idx];
+      item.chosenIndex = choiceIdx;
+      Array.from(choicesDiv.children).forEach(child => {
+        child.classList.toggle('selected', parseInt(child.dataset.index) === choiceIdx);
+      });
+    }
+
+    function startTimerForCurrent(){
+      clearTimer();
+      state.timeLeft = state.perQuestionTimeLimit;
+      const startTime = Date.now();
+      timerLabel.textContent = formatTime(state.timeLeft);
+
+      state.timerId = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const remaining = Math.max(0, state.perQuestionTimeLimit - elapsed);
+        state.timeLeft = remaining;
+        timerLabel.textContent = formatTime(remaining);
+
+        if(remaining <= 0){
+          recordTimeForCurrent(state.perQuestionTimeLimit);
+          advanceToNextOrFinish();
+        }
+      }, 250);
+    }
+
+    function recordTimeForCurrent(elapsedSec){
+      const idx = state.currentIndex;
+      if(state.selectedQuestions[idx]){
+        state.selectedQuestions[idx].timeSpent += elapsedSec;
+      }
+    }
+
+    function clearTimer(){ if(state.timerId){ clearInterval(state.timerId); state.timerId = null; } }
+
+    nextBtn.addEventListener('click', () => {
+      const used = state.perQuestionTimeLimit - state.timeLeft;
+      recordTimeForCurrent(Math.max(1, Math.round(used)));
+      goToIndex(state.currentIndex + 1);
+    });
+
+    prevBtn.addEventListener('click', () => {
+      const used = state.perQuestionTimeLimit - state.timeLeft;
+      recordTimeForCurrent(Math.max(1, Math.round(used)));
+      goToIndex(state.currentIndex - 1);
+    });
+
+    function goToIndex(newIdx){
+      clearTimer();
+      if(newIdx < 0) newIdx = 0;
+      if(newIdx >= state.selectedQuestions.length) newIdx = state.selectedQuestions.length - 1;
+      state.currentIndex = newIdx;
+      renderCurrentQuestion();
+      startTimerForCurrent();
+    }
+
+    function advanceToNextOrFinish(){
+      clearTimer();
+      const idx = state.currentIndex;
+      if(idx === state.selectedQuestions.length - 1){ finishQuiz(); }
+      else{ state.currentIndex += 1; renderCurrentQuestion(); startTimerForCurrent(); }
+    }
+
+    submitBtn.addEventListener('click', finishQuiz);
+
+    function finishQuiz(){
+      clearTimer();
+      state.finishedAt = Date.now();
+      const used = state.perQuestionTimeLimit - state.timeLeft;
+      if(used > 0) recordTimeForCurrent(Math.max(1, Math.round(used)));
+
+      state.quizStarted = false;
+      quizCard.style.display = 'none';
+      resultsCard.style.display = 'block';
+      renderResults();
+    }
+
+    function renderResults(){
+      const total = state.selectedQuestions.length;
+      let correct = 0;
+      let wrong = 0;
+      let totalTime = 0;
+      const labels = [];
+      const times = [];
+      const answers = [];
+
+      state.selectedQuestions.forEach((item, i) => {
+        const correctIndex = item.qobj.answer;
+        const chosen = item.chosenIndex;
+        const isCorrect = (chosen === correctIndex);
+        if(chosen === null || chosen === undefined) { wrong++; }
+        else if(isCorrect) correct++; else wrong++;
+
+        totalTime += item.timeSpent || 0;
+        labels.push(`Q ${i+1}`);
+        times.push(Math.round(item.timeSpent || 0));
+        answers.push({ question: item.qobj.question, chosen: chosen === null ? null : item.qobj.options[chosen], correct: item.qobj.options[correctIndex], time: Math.round(item.timeSpent || 0), isCorrect });
+      });
+
+      const percent = Math.round((correct / total) * 100);
+
+      scoreText.textContent = `${correct} / ${total}`;
+      percentText.textContent = `${percent}%`;
+      correctCountEl.textContent = correct;
+      wrongCountEl.textContent = wrong;
+      avgTimeEl.textContent = total > 0 ? Math.round(totalTime / total) + 's' : '0s';
+
+      breakdownTableBody.innerHTML = '';
+      answers.forEach((a, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${idx+1}</td>
+          <td style="max-width:260px">${a.question}</td>
+          <td>${a.chosen === null ? '<em style="color:var(--muted)">Unanswered</em>' : a.chosen}</td>
+          <td>${a.correct}</td>
+          <td>${a.time}s</td>
+        `;
+        if(a.isCorrect) tr.querySelector('td:nth-child(3)').classList.add('correct');
+        else tr.querySelector('td:nth-child(3)').classList.add('wrong');
+        breakdownTableBody.appendChild(tr);
+      });
+
+      renderCharts(correct, wrong, labels, times);
+    }
+
+    function renderCharts(correct, wrong, labels, times){
+      if(pieChart){ pieChart.destroy(); pieChart = null; }
+      if(barChart){ barChart.destroy(); barChart = null; }
+
+      const pieCtx = document.getElementById('pieChart').getContext('2d');
+      pieChart = new Chart(pieCtx, {
+        type: 'pie',
+        data: {
+          labels: ['Correct','Wrong'],
+          datasets: [{ data: [correct, wrong], backgroundColor: ['#e5e7eb','#6b7280'] }]
+        },
+        options: { plugins: {legend: {position:'bottom', labels: {color: '#e5e7eb'}}} }
+      });
+
+      const barCtx = document.getElementById('barChart').getContext('2d');
+      barChart = new Chart(barCtx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{ label: 'Time spent (s)', data: times }]
+        },
+        options: {
+          scales: { x: { ticks: { color: '#e5e7eb' } }, y: { title: {display:true, text:'Seconds', color: '#e5e7eb'}, ticks: {color: '#e5e7eb'} } },
+          plugins: { legend: {display:false} }
+        }
+      });
+    }
+
+    restartBtn.addEventListener('click', () => { resultsCard.style.display = 'none'; setupCard.style.display = 'block'; });
+
+    downloadBtn.addEventListener('click', () => {
+      const payload = {
+        generatedAt: new Date().toISOString(),
+        settings: { perQuestionTimeLimit: state.perQuestionTimeLimit, totalQuestions: state.selectedQuestions.length },
+        results: state.selectedQuestions.map((it, idx) => ({ index: idx+1, question: it.qobj.question, options: it.qobj.options, chosenIndex: it.chosenIndex, chosen: it.chosenIndex === null ? null : it.qobj.options[it.chosenIndex], correctIndex: it.qobj.answer, correct: it.qobj.options[it.qobj.answer], timeSpent: it.timeSpent }))
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'quiz-results.json'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    window.addEventListener('beforeunload', () => { clearTimer(); });
+
+    document.addEventListener('keydown', (e) => {
+      if(!state.quizStarted) return;
+      if(e.key === 'ArrowRight') nextBtn.click();
+      if(e.key === 'ArrowLeft') prevBtn.click();
+    });
+</script>
+</body>
+</html>
